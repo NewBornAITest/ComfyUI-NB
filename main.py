@@ -191,7 +191,9 @@ def notify_completion(prompt_id, extra_data):
         if "url" in completion_data and "endpoint" in completion_data:
             server_url = completion_data["url"]
             endpoint = completion_data["endpoint"]
-            response = requests.post(f"{server_url}/{endpoint}", json={"prompt_id": prompt_id})
+            json_data = {"prompt_id": prompt_id}
+            logging.info(f"Sending post notification to server...")
+            response = requests.post(f"{server_url}/{endpoint}", json=json_data)
             return response
     # server_url = "https://python-server-dot-newbornai-test-436709.lm.r.appspot.com/storage"
     # response = requests.post(f"{server_url}/comfy_prompt_completion", json={"prompt_id": prompt_id})
