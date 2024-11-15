@@ -21,3 +21,6 @@ venv/
 *.log
 web_custom_versions/
 .DS_Store
+install_checkpoints.sh
+install_extensions.sh
+run_the_server.sh

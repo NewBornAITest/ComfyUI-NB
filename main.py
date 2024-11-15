@@ -136,6 +136,7 @@ def prompt_worker(q, server):
             current_time = time.perf_counter()
             execution_time = current_time - execution_start_time
             logging.info("Prompt executed in {:.2f} seconds".format(execution_time))
+            notify_completion(prompt_id, item[3])
 
         flags = q.get_flags()
         free_memory = flags.get("free_memory", False)
@@ -181,6 +182,13 @@ def cleanup_temp():
     temp_dir = folder_paths.get_temp_directory()
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
+
+import requests
+def notify_completion(prompt_id, extra_data):
+    logging.info(f"Prompt {prompt_id} finished, posting to python server...")
+    server_url = "https://python-server-dot-newbornai-test-436709.lm.r.appspot.com/storage"
+    response = requests.post(f"{server_url}/comfy_prompt_completion", json={"prompt_id": prompt_id})
+    return response.status_code
 
 
 if __name__ == "__main__":
