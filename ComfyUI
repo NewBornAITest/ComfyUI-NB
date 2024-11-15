@@ -1,0 +1,13 @@
+#!/bin/bash
+
+BASHRC_PATH="/home/ibrahim/.bashrc"
+PYTHON_PATH="/home/ibrahim/miniconda3/bin/python"
+COMFYUI_RUNNER_PATH="/home/ibrahim/NewBornAI/ComfyUI/main.py"
+
+# Source the bashrc file
+source $BASHRC_PATH
+
+# Start ComfyUI using the defined paths
+if ! sudo -u ibrahim $PYTHON_PATH $COMFYUI_RUNNER_PATH --listen; then
+    echo "Error: Failed to start ComfyUI" >&2
+fi
