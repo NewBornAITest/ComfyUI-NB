@@ -186,9 +186,16 @@ def cleanup_temp():
 import requests
 def notify_completion(prompt_id, extra_data):
     logging.info(f"Prompt {prompt_id} finished, posting to python server...")
-    server_url = "https://python-server-dot-newbornai-test-436709.lm.r.appspot.com/storage"
-    response = requests.post(f"{server_url}/comfy_prompt_completion", json={"prompt_id": prompt_id})
-    return response.status_code
+    if "on_completion" in extra_data:
+        completion_data = extra_data["on_completion"]
+        if "url" in completion_data and "endpoint" in completion_data:
+            server_url = completion_data["url"]
+            endpoint = completion_data["endpoint"]
+            response = requests.post(f"{server_url}/{endpoint}", json={"prompt_id": prompt_id})
+            return response
+    # server_url = "https://python-server-dot-newbornai-test-436709.lm.r.appspot.com/storage"
+    # response = requests.post(f"{server_url}/comfy_prompt_completion", json={"prompt_id": prompt_id})
+    # return response.status_code
 
 
 if __name__ == "__main__":
