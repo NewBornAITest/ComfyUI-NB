@@ -519,7 +519,7 @@ class PromptServer():
                     }
                 ]
             }
-            return web.json_response(system_stats)
+            return web.json_response(ssystem_stats)
 
         @routes.get("/prompt")
         async def get_prompt(request):
@@ -594,6 +594,10 @@ class PromptServer():
             queue_info['queue_running'] = current_queue[0]
             queue_info['queue_pending'] = current_queue[1]
             return web.json_response(queue_info)
+
+        @routes.get("/health_check")
+        async def health_check(request):
+            return web.json_response({"status": "healthy"}, status=200)
 
         @routes.post("/prompt")
         async def post_prompt(request):
