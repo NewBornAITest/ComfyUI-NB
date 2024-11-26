@@ -7,10 +7,10 @@ import folder_paths
 import time
 from comfy.cli_args import args
 from app.logger import setup_logger
-
+from dotenv import load_dotenv
 
 setup_logger(log_level=args.verbose)
-
+load_dotenv()
 
 def execute_prestartup_script():
     def execute_script(script_path):
@@ -184,6 +184,7 @@ def cleanup_temp():
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 import requests
+import boto3
 def notify_completion(prompt_id, extra_data):
     logging.info(f"Prompt {prompt_id} finished, posting to python server...")
     if "on_completion" in extra_data:
@@ -199,6 +200,15 @@ def notify_completion(prompt_id, extra_data):
     # response = requests.post(f"{server_url}/comfy_prompt_completion", json={"prompt_id": prompt_id})
     # return response.status_code
 
+def connect_to_s3():
+    s3_client = boto3.resource(
+        service_name='s3',
+        region_name=os.getenv('S3_BUCKET_REGION'),
+        aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+        aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
+    )
+    bucket = s3_client.Bucket(os.getenv('S3_BUCKET_NAME'))
+    # s3.Bucket('cheez-willikers').upload_file(Filename='foo.csv', Key='foo.csv')
 
 if __name__ == "__main__":
     if args.temp_directory:

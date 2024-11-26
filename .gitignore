@@ -24,3 +24,4 @@ web_custom_versions/
 install_checkpoints.sh
 install_extensions.sh
 run_the_server.sh
+.env
