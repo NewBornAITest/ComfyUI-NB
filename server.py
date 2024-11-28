@@ -331,23 +331,6 @@ class PromptServer():
             else:
                 return web.Response(status=400)
 
-        @routes.post("/test/s3_connect")
-        async def s3_connection_atempt(request):
-            post = await request.json()
-            dest_folder = post.get("destination_folder")
-            print("dest", dest)
-            print("s3_connection_atempt", os.getenv('S3_BUCKET_REGION'), os.getenv('AWS_ACCESS_KEY_ID'), os.getenv('AWS_SECRET_ACCESS_KEY'))
-            s3_client = boto3.resource(
-                service_name='s3',
-                region_name=os.getenv('S3_BUCKET_REGION'),
-                aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-                aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
-            )
-            bucket = s3_client.Bucket(os.getenv('S3_BUCKET_NAME'))
-            dest = dest_folder+'/old_main.py'
-            bucket.upload_file(Filename='old_main.py', Key=dest)            
-            return web.json_response({})
-
         @routes.post("/upload/image")
         async def upload_image(request):
             post = await request.post()
