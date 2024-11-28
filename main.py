@@ -7,10 +7,8 @@ import folder_paths
 import time
 from comfy.cli_args import args
 from app.logger import setup_logger
-from dotenv import load_dotenv
 
 setup_logger(log_level=args.verbose)
-load_dotenv()
 
 def execute_prestartup_script():
     def execute_script(script_path):
@@ -92,6 +90,7 @@ import server
 from server import BinaryEventTypes
 import nodes
 import comfy.model_management
+from newborn_utils import handle_output_data
 
 def cuda_malloc_warning():
     device = comfy.model_management.get_torch_device()
@@ -136,7 +135,7 @@ def prompt_worker(q, server):
             current_time = time.perf_counter()
             execution_time = current_time - execution_start_time
             logging.info("Prompt executed in {:.2f} seconds".format(execution_time))
-            notify_completion(prompt_id, item[3])
+            handle_output_data(prompt_id, item[3], e.history_result)
 
         flags = q.get_flags()
         free_memory = flags.get("free_memory", False)
@@ -183,32 +182,6 @@ def cleanup_temp():
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
 
-import requests
-import boto3
-def notify_completion(prompt_id, extra_data):
-    logging.info(f"Prompt {prompt_id} finished, posting to python server...")
-    if "on_completion" in extra_data:
-        completion_data = extra_data["on_completion"]
-        if "url" in completion_data and "endpoint" in completion_data:
-            server_url = completion_data["url"]
-            endpoint = completion_data["endpoint"]
-            json_data = {"prompt_id": prompt_id}
-            logging.info(f"Sending post notification to server...")
-            response = requests.post(f"{server_url}/{endpoint}", json=json_data)
-            return response
-    # server_url = "https://python-server-dot-newbornai-test-436709.lm.r.appspot.com/storage"
-    # response = requests.post(f"{server_url}/comfy_prompt_completion", json={"prompt_id": prompt_id})
-    # return response.status_code
-
-def connect_to_s3():
-    s3_client = boto3.resource(
-        service_name='s3',
-        region_name=os.getenv('S3_BUCKET_REGION'),
-        aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-        aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
-    )
-    bucket = s3_client.Bucket(os.getenv('S3_BUCKET_NAME'))
-    # s3.Bucket('cheez-willikers').upload_file(Filename='foo.csv', Key='foo.csv')
 
 if __name__ == "__main__":
     if args.temp_directory:
