@@ -90,7 +90,7 @@ import server
 from server import BinaryEventTypes
 import nodes
 import comfy.model_management
-from newborn_utils import handle_output_data
+from newborn_utils import handle_output_data, handle_prompt_execution_start
 
 def cuda_malloc_warning():
     device = comfy.model_management.get_torch_device()
@@ -121,6 +121,9 @@ def prompt_worker(q, server):
             prompt_id = item[1]
             server.last_prompt_id = prompt_id
 
+            # Notify the server that the prompt started
+            handle_prompt_execution_start(prompt_id, item[3])
+            
             e.execute(item[2], prompt_id, item[3], item[4])
             need_gc = True
             q.task_done(item_id,
@@ -135,6 +138,8 @@ def prompt_worker(q, server):
             current_time = time.perf_counter()
             execution_time = current_time - execution_start_time
             logging.info("Prompt executed in {:.2f} seconds".format(execution_time))
+
+            # Upload output files + notify the server that the prompt ended along with the output paths
             handle_output_data(prompt_id, item[3], e.history_result)
 
         flags = q.get_flags()

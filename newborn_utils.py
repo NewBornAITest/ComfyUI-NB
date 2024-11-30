@@ -65,26 +65,37 @@ def upload_multiple_files(local_full_paths, s3_path):
     
     return all(results)  # Returns True if all uploads succeed
 
+def handle_prompt_execution_start(prompt_id, extra_data):
+    if "on_start" in extra_data:
+        on_start_data = extra_data["on_start_data"]
+        if "url" in on_start_data and "endpoint" in on_start_data:
+            server_url = on_start_data["url"]
+            endpoint = on_start_data["endpoint"]
+            json_data = {"prompt_id": prompt_id}
+            logging.info(f"Prompt start - notifying server at {server_url}/{endpoint}", json_data)
+            response = requests.post(f"{server_url}/{endpoint}", json=json_data)
+            return response
+
 def handle_output_data(prompt_id, extra_data, history_result):
     logging.info(f"Prompt {prompt_id} finished, posting to python server...")
     
     # Upload all output images to S3
     output_image_paths = get_output_image_paths(folder_paths.get_output_directory(), history_result)
-    s3_path = None
-    if "s3_base_path" in extra_data:
-        s3_base_path = extra_data["s3_base_path"]
-        s3_path = os.path.join(s3_base_path, prompt_id)
-        logging.info(f"Uploading output files to s3 {s3_path}")
-        res = upload_multiple_files(output_image_paths, s3_path)
+    output_path = None
+    if "output_base_path" in extra_data:
+        output_base_path = extra_data["output_base_path"]
+        output_path = os.path.join(output_base_path, prompt_id)
+        logging.info(f"Uploading output files to s3 {output_path}")
+        res = upload_multiple_files(output_image_paths, output_path)
   
     # Notify the server that the outputs have been uploaded to S3 (successfully or not)
-    print("output_image_paths", output_image_paths)
+    # print("output_image_paths", output_image_paths)
     if "on_completion" in extra_data:
         completion_data = extra_data["on_completion"]
         if "url" in completion_data and "endpoint" in completion_data:
             server_url = completion_data["url"]
             endpoint = completion_data["endpoint"]
-            json_data = {"prompt_id": prompt_id, "s3_path": s3_path, "success": res}
+            json_data = {"prompt_id": prompt_id, "output_path": output_path, "success": res}
             logging.info(f"Notifying server at {server_url}/{endpoint}", json_data)
             response = requests.post(f"{server_url}/{endpoint}", json=json_data)
             return response
