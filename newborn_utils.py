@@ -47,8 +47,11 @@ def upload_file_to_s3(file_name, local_path, s3_path, s3_bucket):
         # Perform the file upload
         s3_bucket.upload_file(Filename=full_local_path, Key=full_s3_path)
         
-        # Return True if successful
-        return True
+        res = {
+            "local_path": full_local_path,
+            "storage_path": full_s3_path
+        }
+        return res
     except ClientError as e:
         # Handle any exceptions (e.g., access denied, bucket not found)
         print(f"Error uploading file: {e}")
@@ -63,17 +66,17 @@ def upload_multiple_files(local_full_paths, s3_path):
         result = upload_file_to_s3(file_name, local_folder_path, s3_path, s3_bucket)
         results.append(result)
     
-    return all(results)  # Returns True if all uploads succeed
+    return results  # Returns True if all uploads succeed
 
 def handle_prompt_execution_start(prompt_id, extra_data):
     if "on_start" in extra_data:
-        on_start_data = extra_data["on_start_data"]
+        on_start_data = extra_data["on_start"]
         if "url" in on_start_data and "endpoint" in on_start_data:
             server_url = on_start_data["url"]
             endpoint = on_start_data["endpoint"]
             json_data = {"prompt_id": prompt_id}
-            logging.info(f"Prompt start - notifying server at {server_url}/{endpoint}", json_data)
-            response = requests.post(f"{server_url}/{endpoint}", json=json_data)
+            logging.info(f"Prompt start - notifying server at {server_url}/{endpoint}/{prompt_id}", json_data)
+            response = requests.post(f"{server_url}/{endpoint}/{prompt_id}", json=json_data)
             return response
 
 def handle_output_data(prompt_id, extra_data, history_result):
@@ -86,7 +89,8 @@ def handle_output_data(prompt_id, extra_data, history_result):
         output_base_path = extra_data["output_base_path"]
         output_path = os.path.join(output_base_path, prompt_id)
         logging.info(f"Uploading output files to s3 {output_path}")
-        res = upload_multiple_files(output_image_paths, output_path)
+        upload_path_tuples = upload_multiple_files(output_image_paths, output_path)
+        upload_success = all(upload_path_tuples)
   
     # Notify the server that the outputs have been uploaded to S3 (successfully or not)
     # print("output_image_paths", output_image_paths)
@@ -95,7 +99,7 @@ def handle_output_data(prompt_id, extra_data, history_result):
         if "url" in completion_data and "endpoint" in completion_data:
             server_url = completion_data["url"]
             endpoint = completion_data["endpoint"]
-            json_data = {"prompt_id": prompt_id, "output_path": output_path, "success": res}
-            logging.info(f"Notifying server at {server_url}/{endpoint}", json_data)
-            response = requests.post(f"{server_url}/{endpoint}", json=json_data)
+            json_data = {"prompt_id": prompt_id, "output": upload_path_tuples, "success": upload_success}
+            logging.info(f"Notifying server at {server_url}/{endpoint}/{prompt_id}", json_data)
+            response = requests.post(f"{server_url}/{endpoint}/{prompt_id}", json=json_data)
             return response
