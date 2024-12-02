@@ -13,6 +13,8 @@ Pillow
 scipy
 tqdm
 psutil
+python-dotenv
+boto3
 
 #non essential dependencies:
 kornia>=0.7.1
