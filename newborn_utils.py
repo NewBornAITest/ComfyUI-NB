@@ -18,12 +18,14 @@ def get_output_image_paths(output_directory, history_result) -> List[str]:
         for image_dict in images_arr:
             filename = image_dict['filename']
             subfolder = image_dict['subfolder']
+            image_type = image_dict['type']
 
-            if subfolder == '':
-                image_full_path = os.path.join(output_directory, filename)
-            else:
-                image_full_path = os.path.join(os.path.join(output_directory, subfolder), filename)
-            output_paths.append(image_full_path)
+            if image_type == "output":
+                if subfolder == '':
+                    image_full_path = os.path.join(output_directory, filename)
+                else:
+                    image_full_path = os.path.join(os.path.join(output_directory, subfolder), filename)
+                output_paths.append(image_full_path)
     
     return output_paths
 
@@ -79,7 +81,7 @@ def handle_prompt_execution_start(prompt_id, extra_data):
             response = requests.post(f"{server_url}/{endpoint}/{prompt_id}", json=json_data)
             return response
 
-def handle_output_data(prompt_id, extra_data, history_result):
+def handle_output_data(prompt_id, extra_data, history_result, execution_time=-1):
     logging.info(f"Prompt {prompt_id} finished, posting to python server...")
     
     # Upload all output images to S3
@@ -99,7 +101,7 @@ def handle_output_data(prompt_id, extra_data, history_result):
         if "url" in completion_data and "endpoint" in completion_data:
             server_url = completion_data["url"]
             endpoint = completion_data["endpoint"]
-            json_data = {"prompt_id": prompt_id, "output": upload_path_tuples, "success": upload_success}
+            json_data = {"prompt_id": prompt_id, "output": upload_path_tuples, "success": upload_success, "execution_time": execution_time}
             logging.info(f"Notifying server at {server_url}/{endpoint}/{prompt_id}", json_data)
             response = requests.post(f"{server_url}/{endpoint}/{prompt_id}", json=json_data)
             return response

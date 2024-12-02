@@ -140,7 +140,7 @@ def prompt_worker(q, server):
             logging.info("Prompt executed in {:.2f} seconds".format(execution_time))
 
             # Upload output files + notify the server that the prompt ended along with the output paths
-            handle_output_data(prompt_id, item[3], e.history_result)
+            handle_output_data(prompt_id, item[3], e.history_result, execution_time)
 
         flags = q.get_flags()
         free_memory = flags.get("free_memory", False)
