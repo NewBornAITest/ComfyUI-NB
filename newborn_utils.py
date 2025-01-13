@@ -70,6 +70,17 @@ def upload_multiple_files(local_full_paths, s3_path):
     
     return results  # Returns True if all uploads succeed
 
+def handle_prompt_enqueue(prompt_id, extra_data):
+    if "on_enqueue" in extra_data:
+        on_enqueue_data = extra_data["on_enqueue"]
+        if "url" in on_enqueue_data and "endpoint" in on_enqueue_data:
+            server_url = on_enqueue_data["url"]
+            endpoint = on_enqueue_data["endpoint"]
+            json_data = {"prompt_id": prompt_id}
+            logging.info(f"Prompt inserted to queue - notifying server at {server_url}/{endpoint}/{prompt_id}", json_data)
+            response = requests.post(f"{server_url}/{endpoint}/{prompt_id}", json=json_data)
+            return response
+
 def handle_prompt_execution_start(prompt_id, extra_data):
     if "on_start" in extra_data:
         on_start_data = extra_data["on_start"]

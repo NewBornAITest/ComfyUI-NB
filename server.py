@@ -36,6 +36,8 @@ from api_server.routes.internal.internal_routes import InternalRoutes
 from dotenv import load_dotenv
 import boto3
 
+from newborn_utils import handle_prompt_enqueue
+
 load_dotenv()
 
 class BinaryEventTypes:
@@ -636,6 +638,10 @@ class PromptServer():
                     outputs_to_execute = valid[2]
                     self.prompt_queue.put((number, prompt_id, prompt, extra_data, outputs_to_execute))
                     response = {"prompt_id": prompt_id, "number": number, "node_errors": valid[3]}
+
+                    # Notify server that a new prompt has been enqueued
+                    handle_prompt_enqueue(prompt_id=prompt_id, extra_data=extra_data)
+
                     return web.json_response(response)
                 else:
                     logging.warning("invalid prompt: {}".format(valid[1]))
