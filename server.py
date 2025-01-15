@@ -880,3 +880,11 @@ class PromptServer():
                 logging.warning(traceback.format_exc())
 
         return json_data
+
+    def get_queue_jobs(self):
+        queue_info = {}
+        current_queue = self.prompt_queue.get_current_queue()
+        queue_info['queue_running'] = current_queue[0]
+        queue_info['queue_pending'] = current_queue[1]
+
+        return queue_info

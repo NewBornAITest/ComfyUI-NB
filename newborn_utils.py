@@ -6,8 +6,20 @@ import os
 import folder_paths
 from typing import List
 from botocore.exceptions import ClientError
-
+from main import server
+from enum import Enum
 load_dotenv()
+
+class WorkflowTypes(str, Enum):
+    TTI = "TTI"
+    VTON = "VTON"
+    UNKNOWN = "UNKNOWN"
+
+WORKFLOW_ESTIMATES = {
+    WorkflowTypes.TTI: 10,  # Example time in minutes
+    WorkflowTypes.VTON: 130,
+    WorkflowTypes.UNKNOWN: 0  # Default time for unknown job types
+}
 
 def get_output_image_paths(output_directory, history_result) -> List[str]:
     output_paths = []
@@ -116,3 +128,42 @@ def handle_output_data(prompt_id, extra_data, history_result, execution_time=-1)
             logging.info(f"Notifying server at {server_url}/{endpoint}/{prompt_id}", json_data)
             response = requests.post(f"{server_url}/{endpoint}/{prompt_id}", json=json_data)
             return response
+
+def get_queue_jobs_info(queue):
+    jobs_info = {}
+    job_types = []
+    total_estimated_time = 0
+
+    # Iterate over each queue (queue_running and queue_pending)
+    for item in queue:
+        # Check if the third element exists and has the key "type"
+        if len(item) >= 4 and isinstance(item[2], dict):
+            type_value = item[3].get('type', 'UNKNOWN')
+            # Ensure we use the enum, defaulting to WorkflowTypes.UNKNOWN if type is unknown
+            job_type = WorkflowTypes(type_value)
+            job_types.append(job_type)
+
+            # Add the estimated time for this job type from the mapping, or 0 if not found
+            total_estimated_time += WORKFLOW_ESTIMATES.get(job_type, 0)
+        else:
+            job_types.append(WorkflowTypes.UNKNOWN)
+            total_estimated_time += WORKFLOW_ESTIMATES.get(WorkflowTypes.UNKNOWN, 0)
+
+    jobs_info['types'] = job_types
+    jobs_info['estimate'] = total_estimated_time
+
+    return jobs_info
+
+def get_queue_estimate():
+    queue_jobs = server.get_queue_jobs()
+    queue_running = queue_jobs['queue_running']
+    queue_pending = queue_jobs['queue_pending']
+
+    running_jobs_info = get_queue_jobs_info(queue_running)
+    pending_jobs_info = get_queue_jobs_info(queue_pending)
+
+    jobs_info = {}
+    jobs_info['running'] = running_jobs_info
+    jobs_info['pending'] = pending_jobs_info
+
+    return jobs_info
