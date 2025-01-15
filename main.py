@@ -10,6 +10,8 @@ from app.logger import setup_logger
 
 setup_logger(log_level=args.verbose)
 
+## Updated on: 15/01/2025
+
 def execute_prestartup_script():
     def execute_script(script_path):
         module_name = os.path.splitext(script_path)[0]
