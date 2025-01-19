@@ -15,6 +15,7 @@ tqdm
 psutil
 python-dotenv
 boto3
+google-cloud-secret-manager
 
 #non essential dependencies:
 kornia>=0.7.1

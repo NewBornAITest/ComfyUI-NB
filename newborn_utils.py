@@ -7,6 +7,7 @@ import folder_paths
 from typing import List
 from botocore.exceptions import ClientError
 from enum import Enum
+from google.cloud import secretmanager
 
 load_dotenv()
 
@@ -23,13 +24,37 @@ WORKFLOW_ESTIMATES = {
     WorkflowTypes.UNKNOWN: 0  # Default time for unknown job types
 }
 
+def access_secret(secret_id, version_id="latest"):
+    project_id = "sdvesti-infrastructure"
+    client = secretmanager.SecretManagerServiceClient()
+    name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
+    response = client.access_secret_version(request={"name": name})
+    return response.payload.data.decode("UTF-8")
+
+def get_vm_id():
+    # URL to fetch the instance ID from the metadata server
+    metadata_url = "http://metadata.google.internal/computeMetadata/v1/instance/id"
+    headers = {"Metadata-Flavor": "Google"}
+
+    # Fetch the instance ID
+    response = requests.get(metadata_url, headers=headers)
+    response.raise_for_status()  # Raise an error if the request fails
+
+    return response.text
+
+def get_project_id():
+    url = "http://metadata.google.internal/computeMetadata/v1/project/project-id"
+    headers = {"Metadata-Flavor": "Google"}
+
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        return response.text
+    else:
+        raise Exception("Failed to get project ID from metadata server")
 
 class NewBornUtils:
     def __init__(self):
         print("NewBornUtils instance initialized...")
-
-    # def __init__(self, server):
-    #     self.server = server
 
     def get_output_image_paths(self, output_directory, history_result) -> List[str]:
         output_paths = []
@@ -51,15 +76,45 @@ class NewBornUtils:
 
         return output_paths
 
+    # def get_s3_bucket(self):
+    #     s3_client = boto3.resource(
+    #         service_name='s3',
+    #         region_name=os.getenv('S3_BUCKET_REGION'),
+    #         aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+    #         aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
+    #     )
+    #     bucket = s3_client.Bucket(os.getenv('S3_BUCKET_NAME'))
+    #     return bucket
+
     def get_s3_bucket(self):
-        s3_client = boto3.resource(
-            service_name='s3',
-            region_name=os.getenv('S3_BUCKET_REGION'),
-            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
-        )
-        bucket = s3_client.Bucket(os.getenv('S3_BUCKET_NAME'))
-        return bucket
+        try:
+            print("Getting S3 bucket...")
+            region = access_secret('S3_BUCKET_REGION')
+            print("Region", region)
+            aws_access_key_id = access_secret('AWS_ACCESS_KEY_ID')
+            aws_secret_access_key = access_secret('AWS_SECRET_ACCESS_KEY')
+            bucket_name = access_secret('S3_BUCKET_NAME')
+
+            # Check if any of the secrets are None (i.e., failed to retrieve)
+            if not all([region, aws_access_key_id, aws_secret_access_key, bucket_name]):
+                raise ValueError("One or more secrets could not be retrieved.")
+
+            # Initialize the S3 client with the retrieved credentials
+            s3_client = boto3.resource(
+                service_name='s3',
+                region_name=region,
+                aws_access_key_id=aws_access_key_id,
+                aws_secret_access_key=aws_secret_access_key
+            )
+
+            # Get the S3 bucket
+            bucket = s3_client.Bucket(bucket_name)
+            return bucket
+
+        except ValueError as ve:
+            print(f"ValueError: {ve}")
+        except Exception as e:
+            print(f"An error occurred while retrieving the S3 bucket: {e}")
 
     def upload_file_to_s3(self, file_name, local_path, s3_path, s3_bucket):
         try:
@@ -87,17 +142,6 @@ class NewBornUtils:
             results.append(result)
 
         return results
-
-    def get_vm_id(self):
-        # URL to fetch the instance ID from the metadata server
-        metadata_url = "http://metadata.google.internal/computeMetadata/v1/instance/id"
-        headers = {"Metadata-Flavor": "Google"}
-
-        # Fetch the instance ID
-        response = requests.get(metadata_url, headers=headers)
-        response.raise_for_status()  # Raise an error if the request fails
-
-        return response.text
 
     def handle_prompt_enqueue(self, prompt_id, extra_data):
         if "on_enqueue" in extra_data:
@@ -173,7 +217,7 @@ class NewBornUtils:
         return {"running": running_jobs_info, "pending": pending_jobs_info}
 
     def publish_queue_estimate_metric(self, jobs_info):
-        VM_id = self.get_vm_id()
+        VM_id = get_vm_id()
         logging.info("Publishing metric to GCP...")
         server_url = "https://newborn-backend-dot-newbornai-test-436709.lm.r.appspot.com"
         endpoint = "tasks"
