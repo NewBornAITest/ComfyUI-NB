@@ -245,6 +245,8 @@ class NewBornUtils:
         logging.info(f"Notifying server at {server_url}/{endpoint}/{VM_id}", json_data)
         response = requests.post(f"{server_url}/{endpoint}/{VM_id}", json=json_data)
 
+        return response
+
     def handle_queue_changed(self, queue_jobs):
         jobs_info = self.get_queue_estimate(queue_jobs)
         self.publish_queue_estimate_metric(jobs_info)
