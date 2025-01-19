@@ -1,4 +1,5 @@
 import comfy.options
+
 comfy.options.enable_args_parsing()
 
 import os
@@ -10,7 +11,8 @@ from app.logger import setup_logger
 
 setup_logger(log_level=args.verbose)
 
-## Updated on: 15/01/2025
+
+## Updated on: 19/01/2025
 
 def execute_prestartup_script():
     def execute_script(script_path):
@@ -52,8 +54,8 @@ def execute_prestartup_script():
             print("{:6.1f} seconds{}:".format(n[0], import_message), n[1])
         print()
 
-execute_prestartup_script()
 
+execute_prestartup_script()
 
 # Main code
 import asyncio
@@ -66,7 +68,8 @@ import logging
 import utils.extra_config
 
 if os.name == "nt":
-    logging.getLogger("xformers").addFilter(lambda record: 'A matching Triton is not available' not in record.getMessage())
+    logging.getLogger("xformers").addFilter(
+        lambda record: 'A matching Triton is not available' not in record.getMessage())
 
 if __name__ == "__main__":
     if args.cuda_device is not None:
@@ -92,7 +95,8 @@ import server
 from server import BinaryEventTypes
 import nodes
 import comfy.model_management
-from newborn_utils import handle_output_data, handle_prompt_execution_start
+from newborn_utils import NewBornUtils
+
 
 def cuda_malloc_warning():
     device = comfy.model_management.get_torch_device()
@@ -103,7 +107,9 @@ def cuda_malloc_warning():
             if b in device_name:
                 cuda_malloc_warning = True
         if cuda_malloc_warning:
-            logging.warning("\nWARNING: this card most likely does not support cuda-malloc, if you get \"CUDA error\" please run ComfyUI with: --disable-cuda-malloc\n")
+            logging.warning(
+                "\nWARNING: this card most likely does not support cuda-malloc, if you get \"CUDA error\" please run ComfyUI with: --disable-cuda-malloc\n")
+
 
 def prompt_worker(q, server):
     e = execution.PromptExecutor(server, lru_size=args.cache_lru)
@@ -124,8 +130,8 @@ def prompt_worker(q, server):
             server.last_prompt_id = prompt_id
 
             # Notify the server that the prompt started
-            handle_prompt_execution_start(prompt_id, item[3])
-            
+            newBornUtils.handle_prompt_execution_start(prompt_id, item[3])
+
             e.execute(item[2], prompt_id, item[3], item[4])
             need_gc = True
             q.task_done(item_id,
@@ -135,14 +141,16 @@ def prompt_worker(q, server):
                             completed=e.success,
                             messages=e.status_messages))
             if server.client_id is not None:
-                server.send_sync("executing", { "node": None, "prompt_id": prompt_id }, server.client_id)
+                server.send_sync("executing", {"node": None, "prompt_id": prompt_id}, server.client_id)
 
             current_time = time.perf_counter()
             execution_time = current_time - execution_start_time
             logging.info("Prompt executed in {:.2f} seconds".format(execution_time))
 
             # Upload output files + notify the server that the prompt ended along with the output paths
-            handle_output_data(prompt_id, item[3], e.history_result, execution_time)
+            newBornUtils.handle_prompt_complete(prompt_id, item[3], e.history_result, execution_time)
+            # Publish custom metric to GCP since queue has changed
+            newBornUtils.handle_queue_changed(queue_jobs=server.get_queue_jobs())
 
         flags = q.get_flags()
         free_memory = flags.get("free_memory", False)
@@ -166,6 +174,7 @@ def prompt_worker(q, server):
                 last_gc_collect = current_time
                 need_gc = False
 
+
 async def run(server, address='', port=8188, verbose=True, call_on_start=None):
     addresses = []
     for addr in address.split(","):
@@ -181,6 +190,7 @@ def hijack_progress(server):
         server.send_sync("progress", progress, server.client_id)
         if preview_image is not None:
             server.send_sync(BinaryEventTypes.UNENCODED_PREVIEW_IMAGE, preview_image, server.client_id)
+
     comfy.utils.set_progress_bar_global_hook(hook)
 
 
@@ -200,13 +210,17 @@ if __name__ == "__main__":
     if args.windows_standalone_build:
         try:
             import new_updater
+
             new_updater.update_windows_updater()
         except:
             pass
 
+    # Initialize the new born instance
+    newBornUtils = NewBornUtils()
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    server = server.PromptServer(loop)
+    server = server.PromptServer(loop, newBornUtils=newBornUtils)
     q = execution.PromptQueue(server)
 
     extra_model_paths_config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "extra_model_paths.yaml")
@@ -231,18 +245,19 @@ if __name__ == "__main__":
         logging.info(f"Setting output directory to: {output_dir}")
         folder_paths.set_output_directory(output_dir)
 
-    #These are the default folders that checkpoints, clip and vae models will be saved to when using CheckpointSave, etc.. nodes
+    # These are the default folders that checkpoints, clip and vae models will be saved to when using CheckpointSave, etc.. nodes
     folder_paths.add_model_folder_path("checkpoints", os.path.join(folder_paths.get_output_directory(), "checkpoints"))
     folder_paths.add_model_folder_path("clip", os.path.join(folder_paths.get_output_directory(), "clip"))
     folder_paths.add_model_folder_path("vae", os.path.join(folder_paths.get_output_directory(), "vae"))
-    folder_paths.add_model_folder_path("diffusion_models", os.path.join(folder_paths.get_output_directory(), "diffusion_models"))
+    folder_paths.add_model_folder_path("diffusion_models",
+                                       os.path.join(folder_paths.get_output_directory(), "diffusion_models"))
     folder_paths.add_model_folder_path("loras", os.path.join(folder_paths.get_output_directory(), "loras"))
 
     if args.input_directory:
         input_dir = os.path.abspath(args.input_directory)
         logging.info(f"Setting input directory to: {input_dir}")
         folder_paths.set_input_directory(input_dir)
-    
+
     if args.user_directory:
         user_dir = os.path.abspath(args.user_directory)
         logging.info(f"Setting user directory to: {user_dir}")
@@ -261,11 +276,14 @@ if __name__ == "__main__":
             if ':' in address:
                 address = "[{}]".format(address)
             webbrowser.open(f"{scheme}://{address}:{port}")
+
+
         call_on_start = startup_server
 
     try:
         loop.run_until_complete(server.setup())
-        loop.run_until_complete(run(server, address=args.listen, port=args.port, verbose=not args.dont_print_server, call_on_start=call_on_start))
+        loop.run_until_complete(run(server, address=args.listen, port=args.port, verbose=not args.dont_print_server,
+                                    call_on_start=call_on_start))
     except KeyboardInterrupt:
         logging.info("\nStopped server")
 

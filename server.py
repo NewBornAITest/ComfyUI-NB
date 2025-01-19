@@ -34,21 +34,24 @@ from typing import Optional
 from api_server.routes.internal.internal_routes import InternalRoutes
 
 from dotenv import load_dotenv
-import boto3
 
-from newborn_utils import handle_prompt_enqueue
+from newborn_utils import NewBornUtils  # handle_prompt_enqueue, handle_queue_changed
 
 load_dotenv()
+
 
 class BinaryEventTypes:
     PREVIEW_IMAGE = 1
     UNENCODED_PREVIEW_IMAGE = 2
 
+
 async def send_socket_catch_exception(function, message):
     try:
         await function(message)
-    except (aiohttp.ClientError, aiohttp.ClientPayloadError, ConnectionResetError, BrokenPipeError, ConnectionError) as err:
+    except (
+    aiohttp.ClientError, aiohttp.ClientPayloadError, ConnectionResetError, BrokenPipeError, ConnectionError) as err:
         logging.warning("send error: {}".format(err))
+
 
 def get_comfyui_version():
     comfyui_version = "unknown"
@@ -65,12 +68,14 @@ def get_comfyui_version():
             logging.warning(f"Failed to get ComfyUI version: {e}")
     return comfyui_version.strip()
 
+
 @web.middleware
 async def cache_control(request: web.Request, handler):
     response: web.Response = await handler(request)
     if request.path.endswith('.js') or request.path.endswith('.css'):
         response.headers.setdefault('Cache-Control', 'no-cache')
     return response
+
 
 def create_cors_middleware(allowed_origin: str):
     @web.middleware
@@ -88,6 +93,7 @@ def create_cors_middleware(allowed_origin: str):
         return response
 
     return cors_middleware
+
 
 def is_loopback(host):
     if host is None:
@@ -118,9 +124,9 @@ def is_loopback(host):
 def create_origin_only_middleware():
     @web.middleware
     async def origin_only_middleware(request: web.Request, handler):
-        #this code is used to prevent the case where a random website can queue comfy workflows by making a POST to 127.0.0.1 which browsers don't prevent for some dumb reason.
-        #in that case the Host and Origin hostnames won't match
-        #I know the proper fix would be to add a cookie but this should take care of the problem in the meantime
+        # this code is used to prevent the case where a random website can queue comfy workflows by making a POST to 127.0.0.1 which browsers don't prevent for some dumb reason.
+        # in that case the Host and Origin hostnames won't match
+        # I know the proper fix would be to add a cookie but this should take care of the problem in the meantime
         if 'Host' in request.headers and 'Origin' in request.headers:
             host = request.headers['Host']
             origin = request.headers['Origin']
@@ -129,17 +135,20 @@ def create_origin_only_middleware():
             origin_domain = parsed.netloc.lower()
             host_domain_parsed = urllib.parse.urlsplit('//' + host_domain)
 
-            #limit the check to when the host domain is localhost, this makes it slightly less safe but should still prevent the exploit
+            # limit the check to when the host domain is localhost, this makes it slightly less safe but should still prevent the exploit
             loopback = is_loopback(host_domain_parsed.hostname)
 
-            if parsed.port is None: #if origin doesn't have a port strip it from the host to handle weird browsers, same for host
+            if parsed.port is None:  # if origin doesn't have a port strip it from the host to handle weird browsers, same for host
                 host_domain = host_domain_parsed.hostname
             if host_domain_parsed.port is None:
                 origin_domain = parsed.hostname
 
-            if loopback and host_domain is not None and origin_domain is not None and len(host_domain) > 0 and len(origin_domain) > 0:
+            if loopback and host_domain is not None and origin_domain is not None and len(host_domain) > 0 and len(
+                    origin_domain) > 0:
                 if host_domain != origin_domain:
-                    logging.warning("WARNING: request with non matching host and origin {} != {}, returning 403".format(host_domain, origin_domain))
+                    logging.warning(
+                        "WARNING: request with non matching host and origin {} != {}, returning 403".format(host_domain,
+                                                                                                            origin_domain))
                     return web.Response(status=403)
 
         if request.method == "OPTIONS":
@@ -151,8 +160,9 @@ def create_origin_only_middleware():
 
     return origin_only_middleware
 
+
 class PromptServer():
-    def __init__(self, loop):
+    def __init__(self, loop, newBornUtils: NewBornUtils):
         PromptServer.instance = self
 
         mimetypes.init()
@@ -164,8 +174,9 @@ class PromptServer():
         self.prompt_queue = None
         self.loop = loop
         self.messages = asyncio.Queue()
-        self.client_session:Optional[aiohttp.ClientSession] = None
+        self.client_session: Optional[aiohttp.ClientSession] = None
         self.number = 0
+        self.newBornUtils = newBornUtils
 
         middlewares = [cache_control]
         if args.enable_cors_header:
@@ -204,10 +215,10 @@ class PromptServer():
 
             try:
                 # Send initial state to the new client
-                await self.send("status", { "status": self.get_queue_info(), 'sid': sid }, sid)
+                await self.send("status", {"status": self.get_queue_info(), 'sid': sid}, sid)
                 # On reconnect if we are the currently executing client send the current node
                 if self.client_id == sid and self.last_node_id is not None:
-                    await self.send("executing", { "node": self.last_node_id }, sid)
+                    await self.send("executing", {"node": self.last_node_id}, sid)
 
                 async for msg in ws:
                     if msg.type == aiohttp.WSMsgType.ERROR:
@@ -228,7 +239,7 @@ class PromptServer():
         def get_embeddings(self):
             embeddings = folder_paths.get_filename_list("embeddings")
             return web.json_response(list(map(lambda a: os.path.splitext(a)[0], embeddings)))
-        
+
         @routes.get("/models")
         def list_model_types(request):
             model_types = list(folder_paths.folder_names_and_paths.keys())
@@ -272,7 +283,7 @@ class PromptServer():
 
         def compare_image_hash(filepath, image):
             hasher = node_helpers.hasher()
-            
+
             # function to compare hashes of two images to see if it already exists, fix to #3465
             if os.path.exists(filepath):
                 a = hasher()
@@ -315,7 +326,8 @@ class PromptServer():
                 else:
                     i = 1
                     while os.path.exists(filepath):
-                        if compare_image_hash(filepath, image): #compare hash to prevent saving of duplicates with same name, fix for #3465
+                        if compare_image_hash(filepath,
+                                              image):  # compare hash to prevent saving of duplicates with same name, fix for #3465
                             image_is_duplicate = True
                             break
                         filename = f"{split[0]} ({i}){split[1]}"
@@ -329,7 +341,7 @@ class PromptServer():
                         with open(filepath, "wb") as f:
                             f.write(image.file.read())
 
-                return web.json_response({"name" : filename, "subfolder": subfolder, "type": image_upload_type})
+                return web.json_response({"name": filename, "subfolder": subfolder, "type": image_upload_type})
             else:
                 return web.Response(status=400)
 
@@ -337,7 +349,6 @@ class PromptServer():
         async def upload_image(request):
             post = await request.post()
             return image_upload(post)
-
 
         @routes.post("/upload/mask")
         async def upload_mask(request):
@@ -369,7 +380,7 @@ class PromptServer():
                 if os.path.isfile(file):
                     with Image.open(file) as original_pil:
                         metadata = PngInfo()
-                        if hasattr(original_pil,'text'):
+                        if hasattr(original_pil, 'text'):
                             for key in original_pil.text:
                                 metadata.add_text(key, original_pil.text[key])
                         original_pil = original_pil.convert('RGBA')
@@ -386,7 +397,7 @@ class PromptServer():
         async def view_image(request):
             if "filename" in request.rel_url.query:
                 filename = request.rel_url.query["filename"]
-                filename,output_dir = folder_paths.annotated_filepath(filename)
+                filename, output_dir = folder_paths.annotated_filepath(filename)
 
                 # validation for security: prevent accessing arbitrary path
                 if filename[0] == '/' or '..' in filename:
@@ -485,7 +496,7 @@ class PromptServer():
             safetensors_path = folder_paths.get_full_path(folder_name, filename)
             if safetensors_path is None:
                 return web.Response(status=404)
-            out = comfy.utils.safetensors_header(safetensors_path, max_size=1024*1024)
+            out = comfy.utils.safetensors_header(safetensors_path, max_size=1024 * 1024)
             if out is None:
                 return web.Response(status=404)
             dt = json.loads(out)
@@ -526,7 +537,7 @@ class PromptServer():
                     }
                 ]
             }
-            return web.json_response(ssystem_stats)
+            return web.json_response(system_stats)
 
         @routes.get("/prompt")
         async def get_prompt(request):
@@ -538,11 +549,14 @@ class PromptServer():
             info['input'] = obj_class.INPUT_TYPES()
             info['input_order'] = {key: list(value.keys()) for (key, value) in obj_class.INPUT_TYPES().items()}
             info['output'] = obj_class.RETURN_TYPES
-            info['output_is_list'] = obj_class.OUTPUT_IS_LIST if hasattr(obj_class, 'OUTPUT_IS_LIST') else [False] * len(obj_class.RETURN_TYPES)
+            info['output_is_list'] = obj_class.OUTPUT_IS_LIST if hasattr(obj_class, 'OUTPUT_IS_LIST') else [
+                                                                                                               False] * len(
+                obj_class.RETURN_TYPES)
             info['output_name'] = obj_class.RETURN_NAMES if hasattr(obj_class, 'RETURN_NAMES') else info['output']
             info['name'] = node_class
-            info['display_name'] = nodes.NODE_DISPLAY_NAME_MAPPINGS[node_class] if node_class in nodes.NODE_DISPLAY_NAME_MAPPINGS.keys() else node_class
-            info['description'] = obj_class.DESCRIPTION if hasattr(obj_class,'DESCRIPTION') else ''
+            info['display_name'] = nodes.NODE_DISPLAY_NAME_MAPPINGS[
+                node_class] if node_class in nodes.NODE_DISPLAY_NAME_MAPPINGS.keys() else node_class
+            info['description'] = obj_class.DESCRIPTION if hasattr(obj_class, 'DESCRIPTION') else ''
             info['python_module'] = getattr(obj_class, "RELATIVE_PYTHON_MODULE", "nodes")
             info['category'] = 'sd'
             if hasattr(obj_class, 'OUTPUT_NODE') and obj_class.OUTPUT_NODE == True:
@@ -611,7 +625,7 @@ class PromptServer():
             logging.info("got prompt")
             resp_code = 200
             out_string = ""
-            json_data =  await request.json()
+            json_data = await request.json()
             json_data = self.trigger_on_prompt(json_data)
 
             if "number" in json_data:
@@ -640,7 +654,9 @@ class PromptServer():
                     response = {"prompt_id": prompt_id, "number": number, "node_errors": valid[3]}
 
                     # Notify server that a new prompt has been enqueued
-                    handle_prompt_enqueue(prompt_id=prompt_id, extra_data=extra_data)
+                    self.newBornUtils.handle_prompt_enqueue(prompt_id=prompt_id, extra_data=extra_data)
+                    # Publish custom metric to GCP since queue has changed
+                    self.newBornUtils.handle_queue_changed(queue_jobs=self.get_queue_jobs())
 
                     return web.json_response(response)
                 else:
@@ -651,7 +667,7 @@ class PromptServer():
 
         @routes.post("/queue")
         async def post_queue(request):
-            json_data =  await request.json()
+            json_data = await request.json()
             if "clear" in json_data:
                 if json_data["clear"]:
                     self.prompt_queue.wipe_queue()
@@ -681,7 +697,7 @@ class PromptServer():
 
         @routes.post("/history")
         async def post_history(request):
-            json_data =  await request.json()
+            json_data = await request.json()
             if "clear" in json_data:
                 if json_data["clear"]:
                     self.prompt_queue.wipe_history()
@@ -691,7 +707,7 @@ class PromptServer():
                     self.prompt_queue.delete_history_item(id_to_delete)
 
             return web.Response(status=200)
-        
+
         # Internal route. Should not be depended upon and is subject to change at any time.
         # TODO(robinhuang): Move to internal route table class once we refactor PromptServer to pass around Websocket.
         # NOTE: This was an experiment and WILL BE REMOVED
@@ -707,23 +723,26 @@ class PromptServer():
             model_directory = data.get('model_directory')
             folder_path = data.get('folder_path')
             model_filename = data.get('model_filename')
-            progress_interval = data.get('progress_interval', 1.0) # In seconds, how often to report download progress.
+            progress_interval = data.get('progress_interval', 1.0)  # In seconds, how often to report download progress.
 
             if not url or not model_directory or not model_filename or not folder_path:
-                return web.json_response({"status": "error", "message": "Missing URL or folder path or filename"}, status=400)
+                return web.json_response({"status": "error", "message": "Missing URL or folder path or filename"},
+                                         status=400)
 
             session = self.client_session
             if session is None:
                 logging.error("Client session is not initialized")
                 return web.Response(status=500)
-            
-            task = asyncio.create_task(download_model(lambda url: session.get(url), model_filename, url, model_directory, folder_path, report_progress, progress_interval))
+
+            task = asyncio.create_task(
+                download_model(lambda url: session.get(url), model_filename, url, model_directory, folder_path,
+                               report_progress, progress_interval))
             await task
 
             return web.json_response(task.result().to_dict())
 
     async def setup(self):
-        timeout = aiohttp.ClientTimeout(total=None) # no timeout
+        timeout = aiohttp.ClientTimeout(total=None)  # no timeout
         self.client_session = aiohttp.ClientSession(timeout=timeout)
 
     def add_routes(self):
@@ -826,7 +845,7 @@ class PromptServer():
             self.messages.put_nowait, (event, data, sid))
 
     def queue_updated(self):
-        self.send_sync("status", { "status": self.get_queue_info() })
+        self.send_sync("status", {"status": self.get_queue_info()})
 
     async def publish_loop(self):
         while True:
@@ -842,10 +861,10 @@ class PromptServer():
         ssl_ctx = None
         scheme = "http"
         if args.tls_keyfile and args.tls_certfile:
-                ssl_ctx = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_SERVER, verify_mode=ssl.CERT_NONE)
-                ssl_ctx.load_cert_chain(certfile=args.tls_certfile,
-                                keyfile=args.tls_keyfile)
-                scheme = "https"
+            ssl_ctx = ssl.SSLContext(protocol=ssl.PROTOCOL_TLS_SERVER, verify_mode=ssl.CERT_NONE)
+            ssl_ctx.load_cert_chain(certfile=args.tls_certfile,
+                                    keyfile=args.tls_keyfile)
+            scheme = "https"
 
         logging.info("Starting server\n")
         for addr in addresses:
@@ -855,7 +874,7 @@ class PromptServer():
             await site.start()
 
             if not hasattr(self, 'address'):
-                self.address = address #TODO: remove this
+                self.address = address  # TODO: remove this
                 self.port = port
 
             if ':' in address:
