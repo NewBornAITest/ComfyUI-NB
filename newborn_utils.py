@@ -91,21 +91,9 @@ class NewBornUtils:
 
         return output_paths
 
-    # def get_s3_bucket(self):
-    #     s3_client = boto3.resource(
-    #         service_name='s3',
-    #         region_name=os.getenv('S3_BUCKET_REGION'),
-    #         aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-    #         aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
-    #     )
-    #     bucket = s3_client.Bucket(os.getenv('S3_BUCKET_NAME'))
-    #     return bucket
-
     def get_s3_bucket(self):
         try:
-            print("Getting S3 bucket...")
             region = access_secret('S3_BUCKET_REGION')
-            print("Region", region)
             aws_access_key_id = access_secret('AWS_ACCESS_KEY_ID')
             aws_secret_access_key = access_secret('AWS_SECRET_ACCESS_KEY')
             bucket_name = access_secret('S3_BUCKET_NAME')
@@ -237,7 +225,7 @@ class NewBornUtils:
 
         logging.info("Publishing metric to GCP...")
         server_url = "https://newborn-backend-dot-newbornai-test-436709.lm.r.appspot.com"
-        endpoint = "tasks"
+        endpoint = "tasks/queue_change"
         json_data = {
             "jobs_info": jobs_info,
             "zone": zone
