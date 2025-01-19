@@ -24,12 +24,14 @@ WORKFLOW_ESTIMATES = {
     WorkflowTypes.UNKNOWN: 0  # Default time for unknown job types
 }
 
+
 def access_secret(secret_id, version_id="latest"):
     project_id = "sdvesti-infrastructure"
     client = secretmanager.SecretManagerServiceClient()
     name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
     response = client.access_secret_version(request={"name": name})
     return response.payload.data.decode("UTF-8")
+
 
 def get_vm_id():
     # URL to fetch the instance ID from the metadata server
@@ -42,6 +44,18 @@ def get_vm_id():
 
     return response.text
 
+
+def get_vm_zone():
+    # Send a GET request to the metadata server to retrieve the zone
+    url = 'http://metadata.google.internal/computeMetadata/v1/instance/zone'
+    headers = {'Metadata-Flavor': 'Google'}
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    zone = response.text.split('/')[-1]
+
+    return zone
+
+
 def get_project_id():
     url = "http://metadata.google.internal/computeMetadata/v1/project/project-id"
     headers = {"Metadata-Flavor": "Google"}
@@ -51,6 +65,7 @@ def get_project_id():
         return response.text
     else:
         raise Exception("Failed to get project ID from metadata server")
+
 
 class NewBornUtils:
     def __init__(self):
@@ -218,11 +233,14 @@ class NewBornUtils:
 
     def publish_queue_estimate_metric(self, jobs_info):
         VM_id = get_vm_id()
+        zone = get_vm_zone()
+
         logging.info("Publishing metric to GCP...")
         server_url = "https://newborn-backend-dot-newbornai-test-436709.lm.r.appspot.com"
         endpoint = "tasks"
         json_data = {
-            "jobs_info": jobs_info
+            "jobs_info": jobs_info,
+            "zone": zone
         }
         logging.info(f"Notifying server at {server_url}/{endpoint}/{VM_id}", json_data)
         response = requests.post(f"{server_url}/{endpoint}/{VM_id}", json=json_data)
