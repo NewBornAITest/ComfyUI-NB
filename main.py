@@ -197,7 +197,7 @@ def cleanup_temp():
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
 
-def report_vm_queue_status(delta=2):
+def report_vm_queue_status(delta=2.5):
     # Publish custom metric to GCP since queue has changed
     while True:
         try:

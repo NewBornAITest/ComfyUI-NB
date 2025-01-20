@@ -3,11 +3,13 @@ import boto3
 import requests
 import logging
 import os
+import time
 import folder_paths
 from typing import List
 from botocore.exceptions import ClientError
 from enum import Enum
 from google.cloud import secretmanager
+from google.cloud import monitoring_v3
 
 load_dotenv()
 
@@ -70,6 +72,10 @@ def get_project_id():
 class NewBornUtils:
     def __init__(self):
         print("NewBornUtils instance initialized...")
+        self.monitoring = monitoring_v3.MetricServiceClient()
+        self.project_id = get_project_id()
+        self.instance_id = get_vm_id()
+        self.zone = get_vm_zone()
 
     def get_output_image_paths(self, output_directory, history_result) -> List[str]:
         output_paths = []
@@ -210,7 +216,7 @@ class NewBornUtils:
 
         return jobs_info
 
-    def get_queue_estimate(self, queue_jobs):
+    def get_jobs_info(self, queue_jobs):
         queue_running = queue_jobs['queue_running']
         queue_pending = queue_jobs['queue_pending']
 
@@ -219,21 +225,71 @@ class NewBornUtils:
 
         return {"running": running_jobs_info, "pending": pending_jobs_info}
 
-    def publish_queue_estimate_metric(self, jobs_info):
-        VM_id = get_vm_id()
-        zone = get_vm_zone()
+    def get_queue_time_estimate_metric(self, jobs_info):
+        running_jobs_info = jobs_info["running"]
+        pending_jobs_info = jobs_info["pending"]
+        if not running_jobs_info or not pending_jobs_info or "estimate" not in running_jobs_info or "estimate" not in pending_jobs_info:
+            raise RuntimeError(f"No jobs estimate found...")
 
-        server_url = "https://newborn-backend-dot-newbornai-test-436709.lm.r.appspot.com"
-        endpoint = "tasks/queue_change"
-        json_data = {
-            "jobs_info": jobs_info,
-            "zone": zone
-        }
-        # logging.info(f"Publishing metric to server at {server_url}/{endpoint}/{VM_id}", json_data)
-        response = requests.post(f"{server_url}/{endpoint}/{VM_id}", json=json_data)
+        running_jobs_estimate = running_jobs_info["estimate"]
+        pending_jobs_estimate = pending_jobs_info["estimate"]
+        total_estimate = running_jobs_estimate + pending_jobs_estimate
+        return total_estimate
 
-        return response
+    def report_custom_metric(self, metric_value):
+        series = monitoring_v3.TimeSeries()
+        series.resource.type = "gce_instance"
+        series.resource.labels["instance_id"] = self.instance_id
+        series.resource.labels["zone"] = self.zone
+        series.metric.type = "custom.googleapis.com/custom_vm_work_estimate"
+        series.metric.labels["VM_name"] = self.instance_id
+        series.metric.labels["instance_group"] = "vton-instance-group"
+
+        now = time.time()
+        seconds = int(now)
+        nanos = int((now - seconds) * 10 ** 9)
+
+        # Create the TimeInterval object with the end time
+        interval = monitoring_v3.TimeInterval(
+            {"end_time": {"seconds": seconds, "nanos": nanos}}
+        )
+
+        # Create the point with the value and time interval
+        point = monitoring_v3.Point({
+            "interval": interval,
+            "value": {
+                "double_value": float(metric_value)
+            }
+        })
+
+        # Assign the point to the series' points list
+        series.points = [point]
+
+        # Send the time series data
+        self.monitoring.create_time_series(
+            name=f"projects/{self.project_id}",
+            time_series=[series]
+        )
+
+        print(f"Reported value: {metric_value} for VM: {self.instance_id}")
 
     def handle_queue_changed(self, queue_jobs):
-        jobs_info = self.get_queue_estimate(queue_jobs)
-        self.publish_queue_estimate_metric(jobs_info)
+        jobs_info = self.get_jobs_info(queue_jobs)
+        cutom_metric = self.get_queue_time_estimate_metric(jobs_info=jobs_info)
+        print("About to report custom metric", cutom_metric)
+        self.report_custom_metric(metric_value=cutom_metric)
+
+    # def publish_queue_estimate_metric(self, jobs_info):
+    #     VM_id = get_vm_id()
+    #     zone = get_vm_zone()
+
+    #     server_url = "https://newborn-backend-dot-newbornai-test-436709.lm.r.appspot.com"
+    #     endpoint = "tasks/queue_change"
+    #     json_data = {
+    #         "jobs_info": jobs_info,
+    #         "zone": zone
+    #     }
+    #     # logging.info(f"Publishing metric to server at {server_url}/{endpoint}/{VM_id}", json_data)
+    #     response = requests.post(f"{server_url}/{endpoint}/{VM_id}", json=json_data)
+
+    #     return response
