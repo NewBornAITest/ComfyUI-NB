@@ -655,8 +655,6 @@ class PromptServer():
 
                     # Notify server that a new prompt has been enqueued
                     self.newBornUtils.handle_prompt_enqueue(prompt_id=prompt_id, extra_data=extra_data)
-                    # # Publish custom metric to GCP since queue has changed
-                    # self.newBornUtils.handle_queue_changed(queue_jobs=self.get_queue_jobs())
 
                     return web.json_response(response)
                 else:

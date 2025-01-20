@@ -149,8 +149,6 @@ def prompt_worker(q, server):
 
             # Upload output files + notify the server that the prompt ended along with the output paths
             newBornUtils.handle_prompt_complete(prompt_id, item[3], e.history_result, execution_time)
-            # # Publish custom metric to GCP since queue has changed
-            # newBornUtils.handle_queue_changed(queue_jobs=server.get_queue_jobs())
 
         flags = q.get_flags()
         free_memory = flags.get("free_memory", False)
