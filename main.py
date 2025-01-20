@@ -149,8 +149,8 @@ def prompt_worker(q, server):
 
             # Upload output files + notify the server that the prompt ended along with the output paths
             newBornUtils.handle_prompt_complete(prompt_id, item[3], e.history_result, execution_time)
-            # Publish custom metric to GCP since queue has changed
-            newBornUtils.handle_queue_changed(queue_jobs=server.get_queue_jobs())
+            # # Publish custom metric to GCP since queue has changed
+            # newBornUtils.handle_queue_changed(queue_jobs=server.get_queue_jobs())
 
         flags = q.get_flags()
         free_memory = flags.get("free_memory", False)
@@ -199,8 +199,25 @@ def cleanup_temp():
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
 
+def report_vm_queue_status(delta=2):
+    # Publish custom metric to GCP since queue has changed
+    while True:
+        try:
+            queue_jobs = server.get_queue_jobs()
+            newBornUtils.handle_queue_changed(queue_jobs=queue_jobs)
+        except Exception as e:
+            logging.error(f"Error reporting queue status: {e}")
+
+        time.sleep(delta)
+
+def start_scheduler():
+    """Start a background thread to run periodic tasks."""
+    scheduler_thread = threading.Thread(target=report_vm_queue_status, daemon=True)
+    scheduler_thread.start()
 
 if __name__ == "__main__":
+    print("ComfyUI main starting...")
+
     if args.temp_directory:
         temp_dir = os.path.join(os.path.abspath(args.temp_directory), "temp")
         logging.info(f"Setting temp directory to: {temp_dir}")
@@ -279,6 +296,9 @@ if __name__ == "__main__":
 
 
         call_on_start = startup_server
+
+    # Start the schedules queue status reporting
+    start_scheduler()
 
     try:
         loop.run_until_complete(server.setup())

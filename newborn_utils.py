@@ -223,14 +223,13 @@ class NewBornUtils:
         VM_id = get_vm_id()
         zone = get_vm_zone()
 
-        logging.info("Publishing metric to GCP...")
         server_url = "https://newborn-backend-dot-newbornai-test-436709.lm.r.appspot.com"
         endpoint = "tasks/queue_change"
         json_data = {
             "jobs_info": jobs_info,
             "zone": zone
         }
-        logging.info(f"Notifying server at {server_url}/{endpoint}/{VM_id}", json_data)
+        # logging.info(f"Publishing metric to server at {server_url}/{endpoint}/{VM_id}", json_data)
         response = requests.post(f"{server_url}/{endpoint}/{VM_id}", json=json_data)
 
         return response
