@@ -276,7 +276,6 @@ class NewBornUtils:
     def handle_queue_changed(self, queue_jobs):
         jobs_info = self.get_jobs_info(queue_jobs)
         cutom_metric = self.get_queue_time_estimate_metric(jobs_info=jobs_info)
-        print("About to report custom metric", cutom_metric)
         self.report_custom_metric(metric_value=cutom_metric)
 
     # def publish_queue_estimate_metric(self, jobs_info):
