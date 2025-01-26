@@ -153,26 +153,28 @@ class NewBornUtils:
         return results
 
     def handle_prompt_enqueue(self, prompt_id, extra_data):
-        if "on_enqueue" in extra_data:
+        if "on_enqueue" in extra_data and "task_id" in extra_data:
+            task_id = extra_data["task_id"]
             on_enqueue_data = extra_data["on_enqueue"]
             if "url" in on_enqueue_data and "endpoint" in on_enqueue_data:
                 server_url = on_enqueue_data["url"]
                 endpoint = on_enqueue_data["endpoint"]
                 json_data = {"prompt_id": prompt_id}
-                logging.info(f"Prompt inserted to queue - notifying server at {server_url}/{endpoint}/{prompt_id}",
+                logging.info(f"Prompt inserted to queue - notifying server at {server_url}/{endpoint}/{task_id}",
                              json_data)
-                response = requests.post(f"{server_url}/{endpoint}/{prompt_id}", json=json_data)
+                response = requests.post(f"{server_url}/{endpoint}/{task_id}", json=json_data)
                 return response
 
     def handle_prompt_execution_start(self, prompt_id, extra_data):
-        if "on_start" in extra_data:
+        if "on_start" in extra_data and "task_id" in extra_data:
+            task_id = extra_data["task_id"]
             on_start_data = extra_data["on_start"]
             if "url" in on_start_data and "endpoint" in on_start_data:
                 server_url = on_start_data["url"]
                 endpoint = on_start_data["endpoint"]
                 json_data = {"prompt_id": prompt_id}
-                logging.info(f"Prompt start - notifying server at {server_url}/{endpoint}/{prompt_id}", json_data)
-                response = requests.post(f"{server_url}/{endpoint}/{prompt_id}", json=json_data)
+                logging.info(f"Prompt start - notifying server at {server_url}/{endpoint}/{task_id}", json_data)
+                response = requests.post(f"{server_url}/{endpoint}/{task_id}", json=json_data)
                 return response
 
     def handle_prompt_complete(self, prompt_id, extra_data, history_result, execution_time=-1):
@@ -187,7 +189,8 @@ class NewBornUtils:
             upload_path_tuples = self.upload_multiple_files(output_image_paths, output_path)
             upload_success = all(upload_path_tuples)
 
-        if "on_completion" in extra_data:
+        if "on_completion" in extra_data and "task_id" in extra_data:
+            task_id = extra_data["task_id"]
             completion_data = extra_data["on_completion"]
             if "url" in completion_data and "endpoint" in completion_data:
                 server_url = completion_data["url"]
@@ -198,8 +201,8 @@ class NewBornUtils:
                     "success": upload_success,
                     "execution_time": execution_time
                 }
-                logging.info(f"Notifying server at {server_url}/{endpoint}/{prompt_id}", json_data)
-                response = requests.post(f"{server_url}/{endpoint}/{prompt_id}", json=json_data)
+                logging.info(f"Notifying server at {server_url}/{endpoint}/{task_id}", json_data)
+                response = requests.post(f"{server_url}/{endpoint}/{task_id}", json=json_data)
                 return response
 
     def get_queue_jobs_info(self, queue):
