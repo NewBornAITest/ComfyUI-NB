@@ -621,6 +621,7 @@ class PromptServer():
             return web.json_response({"status": "healthy"}, status=200)
 
         @routes.post("/prompt")
+        @routes.get("/comfy_prompt")
         async def post_prompt(request):
             logging.info("got prompt")
             resp_code = 200
