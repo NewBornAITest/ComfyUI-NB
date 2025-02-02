@@ -622,12 +622,14 @@ class PromptServer():
 
         @routes.get("/comfy_prompt")
         async def post_prompt(request):
-            logging.info("got prompt")
+            print("comfy_prompt get route...")
             json_data_str = request.headers.get('X-JSON-Payload', '{}')
+            logging.info("got prompt", json_data_str)
             try:
                 json_data = json.loads(json_data_str)
             except json.JSONDecodeError:
                 return web.json_response({"error": "Invalid JSON in header"}, status=400)
+            print("Wohoo!")
             json_data = self.trigger_on_prompt(json_data)
 
             if "number" in json_data:
