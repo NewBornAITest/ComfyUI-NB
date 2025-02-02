@@ -622,6 +622,7 @@ class PromptServer():
 
         @routes.post("/prompt")
         @routes.get("/comfy_prompt")
+        @routes.put("/comfy_prompt")
         async def post_prompt(request):
             logging.info("got prompt")
             resp_code = 200
